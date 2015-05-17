@@ -5,21 +5,107 @@ output:
     keep_md: true
 ---
 
+```{r setoptions, echo=FALSE}
+library(knitr)
+opts_chunk$set(echo=TRUE)
+```
 
 ## Loading and preprocessing the data
+```{r readdata}
+amdata <- read.csv("activity.csv")
+library(dplyr, warn.conflicts=FALSE)
+#gp_amdata <- group_by(amdata, date)
+#tamdata <- transform(amdata, datef=factor(date)) #factor/group by date
+```
 
+## What is total number of steps taken per day?
+```{r sumsteps}
+#sumdata <- summarize(gp_amdata, sumsteps=sum(steps))
+sumdata <- aggregate(amdata$steps, by=list(amdata$date), sum)
+names(sumdata) <- c("date", "sumsteps")
+sumdata
+```
 
+## Histogram for steps
+```{r histogram}
+hist(sumdata$sumsteps, breaks=nrow(sumdata), xlab="Sum of Steps", main="Histogram for sum of steps")
+```
 
-## What is mean total number of steps taken per day?
+## What is mean steps taken per day?
+```{r meansteps}
+meandata <- aggregate(amdata$steps, by=list(amdata$date), mean)
+names(meandata) <- c("date", "meansteps")
+meandata
+```
 
-
+## What is median steps taken per day?
+```{r mediansteps}
+mediandata <- aggregate(amdata$steps, by=list(amdata$date), median)
+names(mediandata) <- c("date", "mediansteps")
+mediandata
+```
 
 ## What is the average daily activity pattern?
-
+```{r daily-activity}
+apdata <- aggregate(amdata$steps, by=list(amdata$interval), mean, na.rm=TRUE)
+names(apdata) <- c("interval", "AverageSteps")
+#apdata
+plot(apdata$interval, apdata$AverageSteps, type="l", xlab="Interval", ylab="AverageSteps", main="Average Daily Activity Pattern")
+apdata[which.max(apdata$AverageSteps),]
+```
 
 
 ## Imputing missing values
+**Strategy for flling missing values** - *Replace all NAs with mean of the related 5 minute interval*
+```{r imputing-missing-values}
+#no. of NA rows
+nrow(amdata[is.na(amdata$steps),])
+#calculate mean steps by interval
+apdata <- aggregate(amdata$steps, by=list(amdata$interval), mean, na.rm=TRUE)
+#merge original data with mean steps by interval data
+new_amdata <- merge(amdata, apdata, by.x="interval", by.y="Group.1")
+#replace NA values with mean of steps for that interval
+new_amdata[is.na(new_amdata$steps),] <- mutate(new_amdata[is.na(new_amdata$steps),], steps=x)
+#sum steps for each day
+sumdata <- aggregate(new_amdata$steps, by=list(new_amdata$date), sum)
+names(sumdata) <- c("date", "sumsteps")
+hist(sumdata$sumsteps, breaks=nrow(sumdata), xlab="Sum of Steps", main="Histogram for sum of steps")
+```
 
+New mean of steps taken per day
+```{r new-meansteps}
+meandata <- aggregate(new_amdata$steps, by=list(new_amdata$date), mean)
+names(meandata) <- c("date", "meansteps")
+meandata
+```
 
+New median of steps taken per day
+```{r new-mediansteps}
+mediandata <- aggregate(new_amdata$steps, by=list(new_amdata$date), median)
+names(mediandata) <- c("date", "mediansteps")
+mediandata
+```
+
+The original and new values for mean and median differ a bit as NAs are placed with means.
 
 ## Are there differences in activity patterns between weekdays and weekends?
+```{r weekdays-n-weekend-patterns}
+#convert date to weekday and append as column
+weekdayscol <- data.frame(weekdays(as.Date(amdata$date)))
+new_amdata <- cbind(amdata, days=weekdayscol)
+#rename weekday column
+new_amdata <- rename(new_amdata, days=weekdays.as.Date.amdata.date..)
+new_amdata$days <- as.character(new_amdata$days)
+new_amdata[new_amdata$days %in% c("Saturday", "Sunday"),]$days <- "weekend"
+new_amdata[new_amdata$days %in% c("Monday", "Tuesday", "Wednesday", "Thursday", "Friday"),]$days <- "weekday"
+new_amdata <- transform(new_amdata, days=factor(days))
+
+apdata <- aggregate(new_amdata$steps, by=list(new_amdata$interval), mean, na.rm=TRUE)
+names(apdata) <- c("interval", "AverageSteps")
+
+all_amdata <- merge(new_amdata, apdata, by.x="interval", by.y="interval")
+library(lattice)
+xyplot(AverageSteps ~ interval | days, data=all_amdata, type="l", layout=c(1,2), xlab="Interval", ylab="Number of steps")
+
+
+```
